@@ -10,7 +10,7 @@ npm i
 
 Install testrpc:
 ```
-npm -g i testrpc
+npm -g i ethereumjs-testrpc
 ```
 
 Run testrpc:
