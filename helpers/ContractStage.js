@@ -5,3 +5,5 @@ export const CLOSEOUT_PROPOSED = 3;
 export const CLOSED_OUT = 4;
 export const TERMINATED = 5;
 export const TERMINATION_PROPOSED = 6;
+export const ARBITRATION = 7;
+export const RESOLVED = 8;

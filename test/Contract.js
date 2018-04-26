@@ -20,20 +20,23 @@ contract('Contract', accounts => {
     const counterpartyAccount = accounts[5];
 
     const dataHash = '0xc15a0175e131a752d83e216abc4e4ff3377278f83d50c0bec9bc3460e68696d6';
+    const resolutionHash = '0x22FC9A94D295Ad2a237eeE2621Cc424981dC1b77';
 
     const createContract = (params = {}) => {
         params = {
             hash: dataHash,
             creationTime: 1477777777,
+            creator: defaultAccount,
             party: Party.CLIENT,
             counterparty: counterpartyAccount,
             price: '1.23456',
-            downPaymentPct: web3.toWei(10),
+            advancePaymentRate: web3.toWei(0.1),
             periodTo: 1888888888,
-            lateFeeRatePct: web3.toWei(1),
+            lateFeeRate: web3.toWei(0.01),
             lateFeeInterval: TimeInterval.WEEK,
-            lateFeeMaxPct: web3.toWei(15),
+            lateFeeMaxRate: web3.toWei(0.15),
             confidealFeePayer: Party.CLIENT,
+            arbitrationClause: false,
             ...params,
         };
 
@@ -42,14 +45,16 @@ contract('Contract', accounts => {
                         confideal.address,
                         params.hash,
                         params.creationTime,
+                        params.creator,
                         params.party,
                         params.counterparty,
                         web3.toWei(params.price),
-                        params.downPaymentPct,
+                        params.advancePaymentRate,
                         params.periodTo,
-                        params.lateFeeRatePct,
+                        params.arbitrationClause,
+                        params.lateFeeRate,
                         params.lateFeeInterval,
-                        params.lateFeeMaxPct,
+                        params.lateFeeMaxRate,
                         params.confidealFeePayer
                 ));
     };
@@ -59,7 +64,10 @@ contract('Contract', accounts => {
 
     it('should create a new contract as a client', () => {
         const timeBefore = Math.floor(Date.now() / 1000);
-        return createContract({confidealFeePayer: Party.CONTRACTOR})
+        return createContract({
+                confidealFeePayer: Party.CONTRACTOR,
+                arbitrationClause: true,
+        })
                 .then(contract => Promise.all([
                     contract.dataHash.call()
                             .then(hash => hash.should.be.equal(dataHash)),
@@ -75,22 +83,22 @@ contract('Contract', accounts => {
                             .then(confidealFee => confidealFee.toNumber().should.be.equal(web3.toWei(1.23456) * 0.01)),
                     contract.total.call()
                             .then(total => total.toString().should.be.equal(web3.toWei(1.23456))),
-                    contract.downPaymentPct.call()
-                            .then(downPaymentPct => downPaymentPct.toString().should.be.equal(web3.toWei(10))),
+                    contract.advancePaymentRate.call()
+                            .then(advancePaymentRate => advancePaymentRate.toString().should.be.equal(web3.toWei(0.1))),
                     contract.periodFrom.call()
                             .then(periodFrom => periodFrom.toNumber().should.be.equal(0)),
                     contract.periodTo.call()
                             .then(periodTo => periodTo.toNumber().should.be.equal(1888888888)),
-                    contract.lateFeeRatePct.call()
-                            .then(lateFeeRatePct => lateFeeRatePct.toString().should.be.equal(web3.toWei(1))),
+                    contract.lateFeeRate.call()
+                            .then(lateFeeRate => lateFeeRate.toString().should.be.equal(web3.toWei(0.01))),
                     contract.lateFeeInterval.call()
                             .then(lateFeeInterval => lateFeeInterval.toNumber().should.be.equal(TimeInterval.WEEK)),
-                    contract.lateFeeMaxPct.call()
-                            .then(lateFeeMaxPct => lateFeeMaxPct.toString().should.be.equal(web3.toWei(15))),
+                    contract.lateFeeMaxRate.call()
+                            .then(lateFeeMaxRate => lateFeeMaxRate.toString().should.be.equal(web3.toWei(0.15))),
                     contract.confidealFeePayer.call()
                             .then(confidealFeePayer => confidealFeePayer.toString().should.be.equal(Party.CONTRACTOR)),
-                    contract.downPayment.call()
-                            .then(downPayment => downPayment.toNumber().should.be.equal(web3.toWei(1.23456) * 0.09)),
+                    contract.advancePayment.call()
+                            .then(advancePayment => advancePayment.toNumber().should.be.equal(web3.toWei(1.23456) * 0.09)),
                     contract.stage.call()
                             .then(stage => stage.toNumber().should.be.equal(ContractStage.TO_BE_SIGNED)),
                     contract.stageTime.call()
@@ -103,6 +111,12 @@ contract('Contract', accounts => {
                                 blockchainCreationTime.toNumber().should.be.at.least(timeBefore);
                                 blockchainCreationTime.toNumber().should.be.below(Date.now() / 1000);
                             }),
+                    contract.arbitrationClause.call()
+                        .then(clause => clause.should.be.equal(true)),
+                    contract.appealWindow.call()
+                        .then(timeout => timeout.toNumber().should.be.equal(60 * 60 * 24 * 10)),
+                    contract.appealsAvailable.call()
+                        .then(appeals => appeals.toNumber().should.be.equal(1)),
                 ]));
     });
 
@@ -120,45 +134,45 @@ contract('Contract', accounts => {
                             .then(confidealFeePayer => confidealFeePayer.toString().should.be.equal(Party.CLIENT)),
                     contract.total.call()
                             .then(total => total.toString().should.be.equal(contractTotal001)),
-                    contract.downPayment.call()
-                            .then(downPayment => downPayment.toNumber().should.be.equal(web3.toWei(0.01) * 0.1)),
+                    contract.advancePayment.call()
+                            .then(advancePayment => advancePayment.toNumber().should.be.equal(web3.toWei(0.01) * 0.1)),
                 ]));
     });
 
     describe('while creating', () => {
-        it('shouldn’t allow set down payment below 0', () => {
+        it('shouldn’t allow set advance payment below 0', () => {
             return expect(
-                createContract({downPaymentPct: -1})
+                createContract({advancePaymentRate: -1})
             ).to.be.rejected;
         });
 
-        it('shouldn’t allow set down payment above 100%', () => {
+        it('shouldn’t allow set advance payment above 100%', () => {
             return expect(
-                createContract({downPaymentPct: web3.toWei(100.1)})
+                createContract({advancePaymentRate: web3.toWei(1.1)})
             ).to.be.rejected;
         });
 
         it('shouldn’t allow set late fee rate below 0', () => {
             return expect(
-                createContract({lateFeeRatePct: -1})
+                createContract({lateFeeRate: -1})
             ).to.be.rejected;
         });
 
         it('shouldn’t allow set late fee rate above 100%', () => {
             return expect(
-                createContract({lateFeeRatePct: web3.toWei(100.1)})
+                createContract({lateFeeRate: web3.toWei(1.1)})
             ).to.be.rejected;
         });
 
         it('shouldn’t allow set maximal late fee below 0', () => {
             return expect(
-                createContract({lateFeeMaxPct: -1})
+                createContract({lateFeeMaxRate: -1})
             ).to.be.rejected;
         });
 
         it('shouldn’t allow set maximal late fee above 100%', () => {
             return expect(
-                createContract({lateFeeMaxPct: web3.toWei(100.1)})
+                createContract({lateFeeMaxRate: web3.toWei(1.1)})
             ).to.be.rejected;
         });
 
@@ -170,7 +184,7 @@ contract('Contract', accounts => {
 
         it('shouldn’t allow to set the maximal late fee greater than the closeout payment', () => {
             return expect(
-                createContract({lateFeeMaxPct: web3.toWei(91)})
+                createContract({lateFeeMaxRate: web3.toWei(0.91)})
             ).to.be.rejected;
         });
 
@@ -178,21 +192,21 @@ contract('Contract', accounts => {
             return Promise.all([
                 expect(
                     createContract({
-                        downPaymentPct: web3.toWei(0.5), // smaller than the Confideal fee
-                        lateFeeMaxPct: web3.toWei(99.5),
+                        advancePaymentRate: web3.toWei(0.005), // smaller than the Confideal fee
+                        lateFeeMaxRate: web3.toWei(0.995),
                         confidealFeePayer: Party.CONTRACTOR,
                     })
                 ).to.be.rejected,
                 createContract({
-                    downPaymentPct: web3.toWei(0.5), // smaller than the Confideal fee
-                    lateFeeMaxPct: web3.toWei(99),
+                    advancePaymentRate: web3.toWei(0.005), // smaller than the Confideal fee
+                    lateFeeMaxRate: web3.toWei(0.99),
                     confidealFeePayer: Party.CONTRACTOR,
                 })
                     .then(contract => Promise.all([
                         contract.total.call()
                             .then(total => total.toString().should.be.equal(web3.toWei('1.23456'))),
-                        contract.downPayment.call()
-                            .then(downPayment => downPayment.toString().should.be.equal('0')),
+                        contract.advancePayment.call()
+                            .then(advancePayment => advancePayment.toString().should.be.equal('0')),
                     ])),
             ]);
         });
@@ -284,8 +298,8 @@ contract('Contract', accounts => {
                                         periodFrom.toNumber().should.be.at.least(timeBefore);
                                         periodFrom.toNumber().should.be.below(Date.now() / 1000);
                                     }),
-                            contract.downPaymentSent.call()
-                                    .then(downPaymentSent => downPaymentSent.should.be.true),
+                            contract.advancePaymentSent.call()
+                                    .then(advancePaymentSent => advancePaymentSent.should.be.true),
                             web3.eth.getBalanceAsync(contract.address)
                                     .then(balance => balance.toNumber()
                                             .should.be.equal(web3.toWei(1.23456) * 0.9)),
@@ -299,7 +313,7 @@ contract('Contract', accounts => {
                 );
     });
 
-    it('should subtract the Confideal fee from the down payment if contractor is a Confideal fee payer and the down payment is greater than the Confideal fee', () => {
+    it('should subtract the Confideal fee from the advance payment if contractor is a Confideal fee payer and the advance payment is greater than the Confideal fee', () => {
         let contractorBalance;
         let confidealBalance;
         return createContract({confidealFeePayer: Party.CONTRACTOR})
@@ -314,8 +328,8 @@ contract('Contract', accounts => {
                         .then(() => Promise.all([
                             contract.stage.call()
                                     .then(stage => stage.toNumber().should.be.equal(ContractStage.RUNNING)),
-                            contract.downPaymentSent.call()
-                                    .then(downPaymentSent => downPaymentSent.should.be.true),
+                            contract.advancePaymentSent.call()
+                                    .then(advancePaymentSent => advancePaymentSent.should.be.true),
                             web3.eth.getBalanceAsync(contract.address)
                                     .then(balance => balance.toNumber()
                                             .should.be.equal(web3.toWei(1.23456) * 0.9)),
@@ -329,10 +343,10 @@ contract('Contract', accounts => {
                 );
     });
 
-    it('should subtract the Confideal fee from the down payment and the closeout payment if contractor is a Confideal fee payer and the down payment isn’t greater than the Confideal fee', () => {
+    it('should subtract the Confideal fee from the advance payment and the closeout payment if contractor is a Confideal fee payer and the advance payment isn’t greater than the Confideal fee', () => {
         let contractorBalance;
         let confidealBalance;
-        return createContract({downPaymentPct: web3.toWei(0.5), confidealFeePayer: Party.CONTRACTOR})
+        return createContract({advancePaymentRate: web3.toWei(0.005), confidealFeePayer: Party.CONTRACTOR})
                 .then(contract => contract.sign({from: counterpartyAccount})
                         .then(() => web3.eth.getBalanceAsync(counterpartyAccount))
                         .then(balance => contractorBalance = balance.toNumber())
@@ -344,10 +358,10 @@ contract('Contract', accounts => {
                         .then(() => Promise.all([
                             contract.stage.call()
                                     .then(stage => stage.toNumber().should.be.equal(ContractStage.RUNNING)),
-                            contract.downPayment.call()
-                                    .then(downPayment => downPayment.toString().should.be.equal('0')),
-                            contract.downPaymentSent.call()
-                                    .then(downPaymentSent => downPaymentSent.should.be.false),
+                            contract.advancePayment.call()
+                                    .then(advancePayment => advancePayment.toString().should.be.equal('0')),
+                            contract.advancePaymentSent.call()
+                                    .then(advancePaymentSent => advancePaymentSent.should.be.false),
                             web3.eth.getBalanceAsync(contract.address)
                                     .then(balance => balance.toNumber()
                                             .should.be.equal(web3.toWei(1.23456) * 0.99)),
@@ -423,18 +437,18 @@ contract('Contract', accounts => {
                 );
     });
 
-    it('shouldn’t send a down payment if it equals 0', () => {
+    it('shouldn’t send a advance payment if it equals 0', () => {
         return createContract({
             price: '0.01',
-            downPaymentPct: 0,
+            advancePaymentRate: 0,
         }).then(contract => contract.sign({from: counterpartyAccount})
-                .then(() => contract.downPayment.call())
-                .then(downPayment => downPayment.toNumber().should.be.equal(0))
+                .then(() => contract.advancePayment.call())
+                .then(advancePayment => advancePayment.toNumber().should.be.equal(0))
 
                 .then(() => contract.pay({value: contractTotal001}))
 
-                .then(() => contract.downPaymentSent.call())
-                .then(downPaymentSent => downPaymentSent.should.be.false)
+                .then(() => contract.advancePaymentSent.call())
+                .then(advancePaymentSent => advancePaymentSent.should.be.false)
         );
     });
 
@@ -448,7 +462,7 @@ contract('Contract', accounts => {
                 }));
     });
 
-    it('should allow a contractor to withdraw a down payment', () => {
+    it('should allow a contractor to withdraw a advance payment', () => {
         return TestContractParty.new()
                 .then(testContractParty => createContract({
                             price: '0.01',
@@ -456,23 +470,23 @@ contract('Contract', accounts => {
                         }).then(contract => testContractParty.sign(contract.address)
                                 .then(() => contract.pay({value: contractTotal001}))
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.false),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.false),
                                     web3.eth.getBalanceAsync(contract.address)
                                             .then(balance => web3.fromWei(balance).toString().should.be.equal('0.01')),
                                 ]))
 
-                                .then(() => testContractParty.withdrawDownPayment(contract.address))
+                                .then(() => testContractParty.withdrawAdvancePayment(contract.address))
                                 .then(result => {
                                     result.receipt.logs.should.have.length(1);
                                     result.receipt.logs[0].topics.should.have.length(1);
                                     result.receipt.logs[0].topics[0]
-                                            .should.be.equal(web3.sha3('DownPaymentWithdrawal()'));
+                                            .should.be.equal(web3.sha3('AdvancePaymentWithdrawal()'));
                                 })
 
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.true),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.true),
                                     web3.eth.getBalanceAsync(contract.address)
                                             .then(balance => web3.fromWei(balance).toString().should.be.equal('0.009')),
                                 ]))
@@ -480,7 +494,7 @@ contract('Contract', accounts => {
                 );
     });
 
-    it('should allow a contractor to withdraw a down payment from terminated contract', () => {
+    it('should allow a contractor to withdraw a advance payment from terminated contract', () => {
         return TestContractParty.new()
                 .then(testContractParty => createContract({
                             price: '0.01',
@@ -488,17 +502,17 @@ contract('Contract', accounts => {
                         }).then(contract => testContractParty.sign(contract.address)
                                 .then(() => contract.pay({value: contractTotal001}))
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.false),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.false),
                                     web3.eth.getBalanceAsync(contract.address)
                                             .then(balance => web3.fromWei(balance).toString().should.be.equal('0.01')),
                                 ]))
                                 .then(() => testContractParty.terminate(contract.address, 100))
                                 .then(() => contract.terminate(100))
-                                .then(() => testContractParty.withdrawDownPayment(contract.address))
+                                .then(() => testContractParty.withdrawAdvancePayment(contract.address))
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.true),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.true),
                                     web3.eth.getBalanceAsync(testContractParty.address)
                                             .then(balance => web3.fromWei(balance).toString().should.be.equal('0.001')),
                                 ]))
@@ -506,7 +520,7 @@ contract('Contract', accounts => {
                 );
     });
 
-    it('should allow a contractor to withdraw a down payment from a closed out contract', () => {
+    it('should allow a contractor to withdraw a advance payment from a closed out contract', () => {
         return TestContractParty.new()
                 .then(testContractParty => createContract({
                             price: '0.01',
@@ -514,17 +528,17 @@ contract('Contract', accounts => {
                         }).then(contract => testContractParty.sign(contract.address)
                                 .then(() => contract.pay({value: contractTotal001}))
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.false),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.false),
                                     web3.eth.getBalanceAsync(contract.address)
                                             .then(balance => web3.fromWei(balance).toString().should.be.equal('0.01')),
                                 ]))
                                 .then(() => testContractParty.closeOut(contract.address, 123))
                                 .then(() => contract.closeOut(123))
-                                .then(() => testContractParty.withdrawDownPayment(contract.address))
+                                .then(() => testContractParty.withdrawAdvancePayment(contract.address))
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.true),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.true),
                                     web3.eth.getBalanceAsync(testContractParty.address)
                                             .then(balance => web3.fromWei(balance).toString().should.be.equal('0.001')),
                                 ]))
@@ -532,35 +546,35 @@ contract('Contract', accounts => {
                 );
     });
 
-    it('shouldn’t allow to withdraw a down payment that is already sent', () => {
+    it('shouldn’t allow to withdraw a advance payment that is already sent', () => {
         return createContract()
                 .then(contract => contract.sign({from: counterpartyAccount})
                         .then(() => contract.pay({value: contractTotal}))
 
-                        .then(() => contract.downPaymentSent.call())
-                        .then(downPaymentSent => downPaymentSent.should.be.true)
+                        .then(() => contract.advancePaymentSent.call())
+                        .then(advancePaymentSent => advancePaymentSent.should.be.true)
 
-                        .then(() => expect(contract.withdrawDownPayment(contract.address, {from: counterpartyAccount}))
+                        .then(() => expect(contract.withdrawAdvancePayment(contract.address, {from: counterpartyAccount}))
                                 .to.be.rejected)
                 );
     });
 
-    it('shouldn’t allow to withdraw a down payment if it equals 0', () => {
+    it('shouldn’t allow to withdraw a advance payment if it equals 0', () => {
         return createContract({
             price: '0.01',
-            downPaymentPct: 0,
+            advancePaymentRate: 0,
         }).then(contract => contract.sign({from: counterpartyAccount})
                 .then(() => contract.pay({value: contractTotal001}))
 
-                .then(() => contract.downPaymentSent.call())
-                .then(downPaymentSent => downPaymentSent.should.be.false)
+                .then(() => contract.advancePaymentSent.call())
+                .then(advancePaymentSent => advancePaymentSent.should.be.false)
 
-                .then(() => expect(contract.withdrawDownPayment(contract.address, {from: counterpartyAccount}))
+                .then(() => expect(contract.withdrawAdvancePayment(contract.address, {from: counterpartyAccount}))
                         .to.be.rejected)
         );
     });
 
-    it('shouldn’t allow a non-contractor to withdraw a down payment', () => {
+    it('shouldn’t allow a non-contractor to withdraw a advance payment', () => {
         return TestContractParty.new()
                 .then(testContractParty => createContract({
                             price: '0.01',
@@ -568,12 +582,12 @@ contract('Contract', accounts => {
                         }).then(contract => testContractParty.sign(contract.address)
                                 .then(() => contract.pay({value: contractTotal001}))
                                 .then(() => Promise.all([
-                                    contract.downPaymentSent.call()
-                                            .then(downPaymentSent => downPaymentSent.should.be.false),
+                                    contract.advancePaymentSent.call()
+                                            .then(advancePaymentSent => advancePaymentSent.should.be.false),
                                     web3.eth.getBalanceAsync(contract.address)
                                             .then(balance => web3.fromWei(balance).toNumber().should.be.equal(0.01)),
                                 ]))
-                                .then(() => expect(contract.withdrawDownPayment(contract.address)).to.be.rejected)
+                                .then(() => expect(contract.withdrawAdvancePayment(contract.address)).to.be.rejected)
                         )
                 );
     });
@@ -598,8 +612,8 @@ contract('Contract', accounts => {
                                         stageTime.toNumber().should.be.at.least(timeBefore);
                                         stageTime.toNumber().should.be.below(Date.now() / 1000);
                                     }),
-                            contract.terminationRefundPctClient.call()
-                                    .then(terminationRefundPctClient => terminationRefundPctClient.toNumber()
+                            contract.terminationRefundClientRate.call()
+                                    .then(terminationRefundClientRate => terminationRefundClientRate.toNumber()
                                             .should.be.equal(123)),
                         ]))
                 );
@@ -625,8 +639,8 @@ contract('Contract', accounts => {
                                         stageTime.toNumber().should.be.at.least(timeBefore);
                                         stageTime.toNumber().should.be.below(Date.now() / 1000);
                                     }),
-                            contract.terminationRefundPctContractor.call()
-                                    .then(terminationRefundPctContractor => terminationRefundPctContractor.toNumber()
+                            contract.terminationRefundContractorRate.call()
+                                    .then(terminationRefundContractorRate => terminationRefundContractorRate.toNumber()
                                             .should.be.equal(234)),
                         ]))
                 );
@@ -679,12 +693,12 @@ contract('Contract', accounts => {
                         .then(() => web3.eth.getBalanceAsync(counterpartyAccount))
                         .then(balance => contractorBalanceAfterPay = balance)
 
-                        .then(() => contract.terminate(web3.toWei(25), {from: defaultAccount}))
+                        .then(() => contract.terminate(web3.toWei(0.25), {from: defaultAccount}))
 
                         .then(() => web3.eth.getBalanceAsync(defaultAccount))
                         .then(balance => clientBalanceAfterTerminationProposition = balance)
 
-                        .then(() => contract.terminate(web3.toWei(25), {from: counterpartyAccount}))
+                        .then(() => contract.terminate(web3.toWei(0.25), {from: counterpartyAccount}))
                         .then(result => {
                             result.logs.should.have.length(2);
                             result.logs[0].event.should.be.equal('TerminationProposition');
@@ -729,8 +743,8 @@ contract('Contract', accounts => {
                             counterparty: testContractParty.address,
                         })
                                 .then(contract => testContractParty.pay(contract.address, {value: contractTotal001})
-                                        .then(() => contract.terminate(web3.toWei(80)))
-                                        .then(() => testContractParty.terminate(contract.address, web3.toWei(80)))
+                                        .then(() => contract.terminate(web3.toWei(0.8)))
+                                        .then(() => testContractParty.terminate(contract.address, web3.toWei(0.8)))
                                         .then(() => Promise.all([
                                             contract.terminationRefund.call()
                                                     .then(terminationRefund => web3.fromWei(terminationRefund).toString()
@@ -765,8 +779,8 @@ contract('Contract', accounts => {
         return createContract({price: '0.01'})
                 .then(contract => contract.sign({from: counterpartyAccount})
                         .then(() => contract.pay({value: contractTotal001}))
-                        .then(() => contract.terminate(web3.toWei(80)))
-                        .then(() => contract.terminate(web3.toWei(80), {from: counterpartyAccount}))
+                        .then(() => contract.terminate(web3.toWei(0.8)))
+                        .then(() => contract.terminate(web3.toWei(0.8), {from: counterpartyAccount}))
                         .then(() => contract.terminationRefundSent.call()
                                 .then(terminationRefundSent => terminationRefundSent.should.be.true)
                         )
@@ -777,13 +791,13 @@ contract('Contract', accounts => {
     it('shouldn’t allow to withdraw a termination refund if it equals 0', () => {
         return createContract({
             price: '0.01',
-            downPaymentPct: web3.toWei(100), // but why?
-            lateFeeRatePct: 0,
+            advancePaymentRate: web3.toWei(1), // but why?
+            lateFeeRate: 0,
         })
                 .then(contract => contract.sign({from: counterpartyAccount})
                         .then(() => contract.pay({value: contractTotal001}))
-                        .then(() => contract.terminate(web3.toWei(80)))
-                        .then(() => contract.terminate(web3.toWei(80), {from: counterpartyAccount}))
+                        .then(() => contract.terminate(web3.toWei(0.8)))
+                        .then(() => contract.terminate(web3.toWei(0.8), {from: counterpartyAccount}))
                         .then(() => Promise.all([
                             contract.terminationRefund.call()
                                     .then(terminationRefund => web3.fromWei(terminationRefund).toString()
@@ -803,8 +817,8 @@ contract('Contract', accounts => {
                             counterparty: testContractParty.address,
                         })
                                 .then(contract => testContractParty.pay(contract.address, {value: contractTotal001})
-                                        .then(() => contract.terminate(web3.toWei(100)))
-                                        .then(() => testContractParty.terminate(contract.address, web3.toWei(100)))
+                                        .then(() => contract.terminate(web3.toWei(1)))
+                                        .then(() => testContractParty.terminate(contract.address, web3.toWei(1)))
                                         .then(() => Promise.all([
                                             contract.terminationRefund.call()
                                                     .then(terminationRefund => web3.fromWei(terminationRefund).toString()
@@ -1062,7 +1076,7 @@ contract('Contract', accounts => {
                         })
                                 .then(contract => testContractParty.sign(contract.address)
                                         .then(() => contract.pay({value: contractTotal001}))
-                                        .then(() => testContractParty.withdrawDownPayment(contract.address))
+                                        .then(() => testContractParty.withdrawAdvancePayment(contract.address))
                                         .then(() => testContractParty.closeOut(contract.address,
                                                 1888888888 + TimeInterval.WEEK))
                                         .then(() => contract.closeOut(1888888888 + TimeInterval.WEEK))
@@ -1112,8 +1126,8 @@ contract('Contract', accounts => {
     it('shouldn’t allow to withdraw a closeout payment if it equals 0', () => {
         return createContract({
             price: '0.01',
-            downPaymentPct: web3.toWei(100), // but why?
-            lateFeeRatePct: 0,
+            advancePaymentRate: web3.toWei(1), // but why?
+            lateFeeRate: 0,
         })
                 .then(contract => contract.sign({from: counterpartyAccount})
                         .then(() => contract.pay({value: contractTotal001}))
@@ -1150,6 +1164,315 @@ contract('Contract', accounts => {
 
                                         .then(() => expect(contract.withdrawCloseoutPayment()).to.be.rejected)
                                 )
+                );
+    });
+
+    it('should allow arbitration call from client', () => {
+        const timeBefore = Math.floor(Date.now() / 1000);
+        return createContract({ price: '1.23456', arbitrationClause: true })
+                .then(contract => contract.sign({ from: counterpartyAccount })
+                        .then(() => contract.pay({ value: contractTotal }))
+                        .then(() => contract.arbitration({ from: counterpartyAccount })
+                                .then(() => Promise.all([
+                                        contract.stage.call()
+                                                .then(stage => stage.toNumber().should.be.equal(ContractStage.ARBITRATION)),
+                                        contract.stageTime.call()
+                                                .then(stageTime => {
+                                                        stageTime.toNumber().should.be.at.least(timeBefore);
+                                                        stageTime.toNumber().should.be.below(Date.now() / 1000);
+                                                }),
+                                ])))
+                        );
+    });
+
+    it('should allow arbitration call from contractor', () => {
+        const timeBefore = Math.floor(Date.now() / 1000);
+        return createContract({ price: '1.23456', arbitrationClause: true })
+                .then(contract => contract.sign({ from: counterpartyAccount })
+                        .then(() => contract.pay({ value: contractTotal }))
+                        .then(() => contract.arbitration({ from: defaultAccount })
+                                .then(() => Promise.all([
+                                        contract.stage.call()
+                                                .then(stage => stage.toNumber().should.be.equal(ContractStage.ARBITRATION)),
+                                        contract.stageTime.call()
+                                                .then(stageTime => {
+                                                        stageTime.toNumber().should.be.at.least(timeBefore);
+                                                        stageTime.toNumber().should.be.below(Date.now() / 1000);
+                                                }),
+                                ])))
+                        );
+    });
+
+    it('shouldn’t allow arbitration call without arbitration clause', () => {
+        return createContract({ price: '0.01', arbitrationClause: false })
+                .then(contract => contract.sign({from: counterpartyAccount})
+                        .then(() => contract.pay({value: contractTotal001}))
+                        .then(() => expect(contract.arbitration({ from: defaultAccount })).to.be.rejected));
+    });
+
+    it('shouldn’t allow arbitration call from not contractor or not client', () => {
+        return createContract({ price: '0.01', arbitrationClause: false })
+                .then(contract => contract.sign({from: counterpartyAccount})
+                        .then(() => contract.pay({value: contractTotal001}))
+                        .then(() => expect(contract.arbitration({ from: accounts[1] })).to.be.rejected));
+    });
+
+    it('shouldn’t allow to resolve dispute from not confideal contract', () => {
+        return createContract()
+                .then(contract => expect(contract.resolveDispute(
+                        resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[1] })).to.be.rejected);
+    });
+
+    it('shouldn’t allow to resolve dispute at the not arbitration stage', () => {
+        return Confideal.deployed().then(confideal => createContract()
+                .then(contract => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] })
+                        .then(() => expect(confideal.resolveDispute(contract.address,
+                                resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[2] })).to.be.rejected)
+                ));
+    });
+
+    it('shouldn’t allow to resolve dispute with incorrect client and contractor shares', () => {
+        return Confideal.deployed()
+                .then(confideal => createContract({ price: '1.23456', arbitrationClause: true })
+                        .then(contract => contract.sign({ from: counterpartyAccount })
+                                .then(() => contract.pay({ value: contractTotal }))
+                                .then(() => contract.arbitration({ from: defaultAccount }))
+                                .then(() => contract.stage.call()
+                                        .then(stage => stage.toNumber().should.be.equal(ContractStage.ARBITRATION)))
+                                .then(() => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] }))
+                                .then(() => expect(confideal.resolveDispute(contract.address,
+                                        resolutionHash, web3.toWei('0.33'), web3.toWei('0.68'), { from: accounts[2] })).to.be.rejected)
+                        )
+                );
+    });
+
+    it('should correctly save assets after dispute resolution', () => {
+        return Confideal.deployed()
+                .then(confideal => createContract({ price: '1.23456', arbitrationClause: true })
+                        .then(contract => contract.sign({ from: counterpartyAccount })
+                                .then(() => contract.pay({ value: contractTotal }))
+                                .then(() => contract.arbitration({ from: defaultAccount }))
+                                .then(() => contract.stage.call()
+                                        .then(stage => stage.toNumber().should.be.equal(ContractStage.ARBITRATION)))
+                                .then(() => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] }))
+                                .then(() => confideal.resolveDispute(contract.address,
+                                        resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[2] }))
+                                .then(() => contract.arbitrationFee.call()
+                                        .then(fee => fee.toString().should.be.equal(web3.toWei('0.1111104'))))
+                                .then(() => contract.clientAsset.call()
+                                        .then(clientAsset => clientAsset.toString().should.be.equal(web3.toWei('0.329997888'))))
+                                .then(() => contract.contractorAsset.call()
+                                        .then(contractorAsset => contractorAsset.toString().should.be.equal(web3.toWei('0.669995712'))))
+                        )
+                );
+    });
+
+    it('shouldn’t allow to withdraw client arbitration payment on not resolved stage', () => {
+        return Confideal.deployed()
+                .then(confideal => createContract()
+                        .then(contract => contract.sign({ from: counterpartyAccount })
+                                .then(() => expect(contract.withdrawClientAsset()).to.be.rejected)
+                        )
+                );
+    });
+
+    it('shouldn’t allow to withdraw client arbitration payment before resolution timeout', () => {
+        return Confideal.deployed()
+                .then(confideal => createContract({ price: '1.23456', arbitrationClause: true })
+                        .then(contract => contract.sign({ from: counterpartyAccount })
+                                .then(() => contract.pay({ value: contractTotal }))
+                                .then(() => contract.arbitration({ from: defaultAccount }))
+                                .then(() => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] }))
+                                .then(() => confideal.resolveDispute(contract.address,
+                                        resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[2] }))
+                                .then(() => expect(contract.withdrawClientAsset()).to.be.rejected)
+                        )
+                );
+    });
+
+    it('shouldn’t allow to withdraw client arbitration payment from not client account', () => {
+        return Confideal.deployed()
+                .then(confideal => confideal.setAppealWindow(0, { from: accounts[0] })
+                        .then(() => createContract({ price: '1.23456', arbitrationClause: true })
+                                .then(contract => contract.sign({ from: counterpartyAccount })
+                                        .then(() => contract.pay({ value: contractTotal }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[2] }))
+                                        .then(() => contract.appealWindow.call()
+                                                .then(timeout => timeout.toNumber().should.be.equal(0)))
+                                        .then(() => expect(
+                                                contract.withdrawClientAsset({ from: accounts[3] })).to.be.rejected)
+                                )
+                        )
+                );
+    });
+
+    it('shouldn’t allow to withdraw contractor arbitration payment on not resolved stage', () => {
+        return Confideal.deployed()
+                .then(confideal => createContract()
+                        .then(contract => contract.sign({ from: counterpartyAccount })
+                                .then(() => expect(contract.withdrawContractorAsset()).to.be.rejected)
+                        )
+                );
+    });
+
+    it('shouldn’t allow to withdraw contractor arbitration payment before resolution timeout', () => {
+        return Confideal.deployed()
+                .then(confideal => createContract({ price: '1.23456', arbitrationClause: true })
+                        .then(contract => contract.sign({ from: counterpartyAccount })
+                                .then(() => contract.pay({ value: contractTotal }))
+                                .then(() => contract.arbitration({ from: defaultAccount }))
+                                .then(() => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] }))
+                                .then(() => confideal.resolveDispute(contract.address,
+                                        resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[2] }))
+                                .then(() => expect(contract.withdrawContractorAsset()).to.be.rejected)
+                        )
+                );
+    });
+
+    it('shouldn’t allow to withdraw contractor arbitration payment from not contractor account', () => {
+        return Confideal.deployed()
+                .then(confideal => confideal.setAppealWindow(0, { from: accounts[0] })
+                        .then(() => createContract({ price: '1.23456', arbitrationClause: true })
+                                .then(contract => contract.sign({ from: counterpartyAccount })
+                                        .then(() => contract.pay({ value: contractTotal }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.setArbiter(contract.address, accounts[2], { from: accounts[0] }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.33'), web3.toWei('0.67'), { from: accounts[2] }))
+                                        .then(() => contract.appealWindow.call()
+                                                .then(timeout => timeout.toNumber().should.be.equal(0)))
+                                        .then(() => expect(
+                                                contract.withdrawContractorAsset({ from: accounts[3] })).to.be.rejected)
+                                )
+                        )
+                );
+    });
+
+    it('should withdraw arbitration payments correctly for withdraw sequence: arbiter, client, contractor', () => {
+        var clientBalance = web3.eth.getBalance(defaultAccount);
+        var contractorBalance = web3.eth.getBalance(counterpartyAccount);
+        var arbiterBalance = web3.eth.getBalance(accounts[2]);
+
+        return Confideal.deployed()
+                .then(confideal => confideal.setAppealWindow(0, { from: defaultAccount })
+                        .then(() => createContract({ arbitrationClause: true })
+                                .then(contract => contract.sign({ from: counterpartyAccount })
+                                        .then(() => contract.pay({ value: contractTotal }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.setArbiter(contract.address, accounts[2], { from: defaultAccount }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.5'), web3.toWei('0.5'), { from: accounts[2] }))
+                                        .then(() => web3.eth.getBalanceAsync(defaultAccount)
+                                                .then(balance => clientBalance = balance))
+                                        .then(() => web3.eth.getBalanceAsync(counterpartyAccount)
+                                                .then(balance => contractorBalance = balance))
+                                        .then(() => confideal.withdrawArbitrationFee(contract.address, { from: accounts[2] }))
+                                        .then(() => contract.withdrawClientAsset({ from: defaultAccount }))
+                                        .then(() => contract.withdrawContractorAsset({ from: counterpartyAccount }))
+                                        .then(() => confideal.withdrawArbitrationRewards({ from: accounts[2] }))
+                                        .then(() => web3.eth.getBalanceAsync(accounts[2])
+                                                .then(balance => balance.toNumber().should.be.above(arbiterBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(defaultAccount)
+                                                .then(balance => balance.toNumber().should.be.above(clientBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(counterpartyAccount)
+                                                .then(balance => balance.toNumber().should.be.above(contractorBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(contract.address)
+                                                .then(balance => web3.fromWei(balance).toString().should.be.equal('0')))
+                                )
+                        )
+                );
+    });
+
+    it('should withdraw arbitration payments correctly for withdraw sequence: client, arbiter, contractor', () => {
+        var clientBalance = web3.eth.getBalance(defaultAccount);
+        var contractorBalance = web3.eth.getBalance(counterpartyAccount);
+        var arbiterBalance = web3.eth.getBalance(accounts[2]);
+
+        return Confideal.deployed()
+                .then(confideal => confideal.setAppealWindow(0, { from: defaultAccount })
+                        .then(() => createContract({ arbitrationClause: true })
+                                .then(contract => contract.sign({ from: counterpartyAccount })
+                                        .then(() => contract.pay({ value: contractTotal }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.setArbiter(contract.address, accounts[2], { from: defaultAccount }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.5'), web3.toWei('0.5'), { from: accounts[2] }))
+                                        .then(() => web3.eth.getBalanceAsync(defaultAccount)
+                                                .then(balance => clientBalance = balance))
+                                        .then(() => web3.eth.getBalanceAsync(counterpartyAccount)
+                                                .then(balance => contractorBalance = balance))
+                                        .then(() => contract.withdrawClientAsset({ from: defaultAccount }))
+                                        .then(() => confideal.withdrawArbitrationFee(contract.address, { from: accounts[2] }))
+                                        .then(() => contract.withdrawContractorAsset({ from: counterpartyAccount }))
+                                        .then(() => confideal.withdrawArbitrationRewards({ from: accounts[2] }))
+                                        .then(() => web3.eth.getBalanceAsync(accounts[2])
+                                                .then(balance => balance.toNumber().should.be.above(arbiterBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(defaultAccount)
+                                                .then(balance => balance.toNumber().should.be.above(clientBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(counterpartyAccount)
+                                                .then(balance => balance.toNumber().should.be.above(contractorBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(contract.address)
+                                                .then(balance => web3.fromWei(balance).toString().should.be.equal('0')))
+                                )
+                        )
+                );
+    });
+
+    it('should withdraw arbitration payments correctly for withdraw sequence: contractor, arbiter, client', () => {
+        var clientBalance = web3.eth.getBalance(defaultAccount);
+        var contractorBalance = web3.eth.getBalance(counterpartyAccount);
+        var arbiterBalance = web3.eth.getBalance(accounts[2]);
+
+        return Confideal.deployed()
+                .then(confideal => confideal.setAppealWindow(0, { from: defaultAccount })
+                        .then(() => createContract({ arbitrationClause: true })
+                                .then(contract => contract.sign({ from: counterpartyAccount })
+                                        .then(() => contract.pay({ value: contractTotal }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.setArbiter(contract.address, accounts[2], { from: defaultAccount }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.5'), web3.toWei('0.5'), { from: accounts[2] }))
+                                        .then(() => web3.eth.getBalanceAsync(defaultAccount)
+                                                .then(balance => clientBalance = balance))
+                                        .then(() => web3.eth.getBalanceAsync(counterpartyAccount)
+                                                .then(balance => contractorBalance = balance))
+                                        .then(() => contract.withdrawContractorAsset({ from: counterpartyAccount }))
+                                        .then(() => confideal.withdrawArbitrationFee(contract.address, { from: accounts[2] }))
+                                        .then(() => contract.withdrawClientAsset({ from: defaultAccount }))
+                                        .then(() => confideal.withdrawArbitrationRewards({ from: accounts[2] }))
+                                        .then(() => web3.eth.getBalanceAsync(accounts[2])
+                                                .then(balance => balance.toNumber().should.be.above(arbiterBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(defaultAccount)
+                                                .then(balance => balance.toNumber().should.be.above(clientBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(counterpartyAccount)
+                                                .then(balance => balance.toNumber().should.be.above(contractorBalance)))
+                                        .then(() => web3.eth.getBalanceAsync(contract.address)
+                                                .then(balance => web3.fromWei(balance).toString().should.be.equal('0')))
+                                )
+                        )
+                );
+    });
+
+    it('shouldn’t allow second appeal if appeals limit equals to 1', () => {
+        return Confideal.deployed()
+                .then(confideal => confideal.setAppealsLimit(1, { from: defaultAccount })
+                        .then(() => confideal.setAppealWindow(60 * 60 * 24 * 10, { from: defaultAccount }))
+                        .then(() => createContract({ arbitrationClause: true })
+                                .then(contract => contract.sign({ from: counterpartyAccount })
+                                        .then(() => contract.pay({ value: contractTotal }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.setArbiter(contract.address, accounts[2], { from: defaultAccount }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.5'), web3.toWei('0.5'), { from: accounts[2] }))
+                                        .then(() => contract.arbitration({ from: defaultAccount }))
+                                        .then(() => confideal.resolveDispute(contract.address,
+                                                resolutionHash, web3.toWei('0.5'), web3.toWei('0.5'), { from: accounts[2] }))
+                                        .then(() => expect(contract.arbitration({ from: defaultAccount })).to.be.rejected)
+                                )
+                        )
                 );
     });
 });

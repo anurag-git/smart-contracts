@@ -1,31 +1,31 @@
 {
-  "name": "confideal-contracts",
-  "version": "1.2.0",
+  "name": "confideal-smart-contracts",
+  "version": "1.3.0",
   "private": true,
   "devDependencies": {
-    "babel-core": "^6.17.0",
-    "babel-preset-react-app": "^3.0.3",
+    "babel-preset-react-app": "^1.0.0",
     "bignumber.js": "^4.0.0",
     "bluebird": "^3.4.6",
-    "chai": "^3.5.0",
-    "chai-as-promised": "^6.0.0",
-    "ethereumjs-testrpc": "^3.0.3",
+    "chai": "3.5.0",
+    "chai-as-promised": "^7.1.1",
+    "ganache-cli": "^7.0.0-beta.0",
     "mocha": "^3.2.0",
     "prompt": "^1.0.0",
     "rimraf": "^2.6.1",
     "semver": "^5.3.0",
-    "truffle-config": "^1.0.2",
-    "truffle-core": "^3.4.5",
-    "truffle-expect": "0.0.3",
-    "truffle-resolver": "https://github.com/baibaratsky/truffle-resolver/tarball/master",
-    "web3": "^1.0.0-beta.22"
+    "solc": "^0.4.23",
+    "truffle-core": "^4.0.6"
   },
   "scripts": {
-    "test": "node scripts/test.js"
+    "test": "truffle test",
+    "ganache": "ganache-cli -i 42 -p 8888"
   },
   "babel": {
     "presets": [
       "react-app"
     ]
+  },
+  "dependencies": {
+    "zeppelin-solidity": "^1.8.0"
   }
 }

@@ -8,17 +8,16 @@ Install dependencies:
 npm i
 ```
 
-Install testrpc:
+Run ganache:
 ```
-npm -g i ethereumjs-testrpc
-```
-
-Run testrpc:
-```
-testrpc
+npm run ganache
 ```
 
-While testrpc is running, run tests:
+While ganache is running, run tests:
 ```
 npm test
 ```
+
+---
+
+© 2016–2018 Confideal Limited. All rights reserved.
